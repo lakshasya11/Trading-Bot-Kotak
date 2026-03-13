@@ -25,6 +25,7 @@ wheels/
 
 # Trading Bot Specific
 access_token*.json
+broker_config.json
 user_profiles.json
 strategy_params.json
 *.db
