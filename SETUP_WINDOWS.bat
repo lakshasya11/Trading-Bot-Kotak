@@ -48,6 +48,16 @@ if errorlevel 1 (
 )
 echo ✅ Python dependencies installed
 
+REM Install auto-login dependencies (optional but recommended)
+echo 📦 Installing auto-login dependencies (Selenium, PyOTP, WebDriver Manager)...
+pip install selenium pyotp webdriver-manager
+if errorlevel 1 (
+    echo ⚠️ Warning: Failed to install auto-login dependencies
+    echo Some auto-login features may not work, but basic trading will function
+) else (
+    echo ✅ Auto-login dependencies installed
+)
+
 REM Deactivate virtual environment
 call venv\Scripts\deactivate.bat
 cd ..
@@ -74,6 +84,15 @@ if not exist "backend\access_token.json" (
     echo ✅ Created access_token.json template
 )
 
+if not exist "backend\user_profiles.json" (
+    if exist "backend\user_profiles.json.template" (
+        copy "backend\user_profiles.json.template" "backend\user_profiles.json" >nul 2>&1
+        echo ✅ Created user_profiles.json from template (auto-login config)
+    ) else (
+        echo ⚠️ user_profiles.json.template not found - auto-login will be skipped
+    )
+)
+
 if not exist "backend\strategy_params.json" (
     copy "backend\strategy_params.json.template" "backend\strategy_params.json" >nul 2>&1
     echo ✅ Created strategy_params.json from template
@@ -81,14 +100,26 @@ if not exist "backend\strategy_params.json" (
 
 echo.
 echo ========================================
-echo           SETUP COMPLETE! ✅
+echo        AUTO-LOGIN SETUP (OPTIONAL)
+echo ========================================
+echo To enable one-click bot startup with auto-login:
+echo.
+echo 1. Edit backend\user_profiles.json
+echo 2. Fill in these fields:
+echo    - user_id: Your Zerodha client ID
+echo    - password: Your Zerodha password
+echo    - totp_secret: Your 2FA secret key
+echo    - api_key: Your Kite API key
+echo    - api_secret: Your Kite API secret
+echo.
+echo See AUTO_LOGIN_SETUP_GUIDE.md for detailed instructions
+echo.
 echo ========================================
 echo.
 echo NEXT STEPS:
-echo 1. Edit backend\access_token.json with your Kite credentials
-echo 2. Review backend\strategy_params.json for trading parameters  
-echo 3. Run START_BOT.bat to launch the trading bot
-echo 4. Access the web interface at http://localhost:3000
+echo 1. Edit backend\user_profiles.json for auto-login (recommended)
+echo 2. Or use backend\access_token.json if you already have a token
+echo 3. Review backend\strategy_params.json for trading parameters  
+echo 4. Run START_BOT.bat to launch the trading bot
+echo 5. Access the web interface at http://localhost:3000
 echo.
-echo Press any key to continue...
-pause >nul

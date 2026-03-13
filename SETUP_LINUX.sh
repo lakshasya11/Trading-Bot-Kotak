@@ -56,6 +56,16 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}✅ Python dependencies installed${NC}"
 
+# Install auto-login dependencies (optional but recommended)
+echo -e "${BLUE}📦 Installing auto-login dependencies (Selenium, PyOTP, WebDriver Manager)...${NC}"
+pip install selenium pyotp webdriver-manager
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}⚠️ Warning: Failed to install auto-login dependencies${NC}"
+    echo "Some auto-login features may not work, but basic trading will function"
+else
+    echo -e "${GREEN}✅ Auto-login dependencies installed${NC}"
+fi
+
 # Deactivate virtual environment
 deactivate
 cd ..
@@ -83,6 +93,15 @@ EOF
     echo -e "${GREEN}✅ Created access_token.json template${NC}"
 fi
 
+if [ ! -f "backend/user_profiles.json" ]; then
+    if [ -f "backend/user_profiles.json.template" ]; then
+        cp backend/user_profiles.json.template backend/user_profiles.json
+        echo -e "${GREEN}✅ Created user_profiles.json from template (auto-login config)${NC}"
+    else
+        echo -e "${YELLOW}⚠️ user_profiles.json.template not found - auto-login will be skipped${NC}"
+    fi
+fi
+
 if [ ! -f "backend/strategy_params.json" ] && [ -f "backend/strategy_params.json.template" ]; then
     cp backend/strategy_params.json.template backend/strategy_params.json
     echo -e "${GREEN}✅ Created strategy_params.json from template${NC}"
@@ -94,14 +113,25 @@ chmod +x STOP_BOT_LINUX.sh
 
 echo
 echo "========================================"
-echo "          SETUP COMPLETE! ✅"
+echo "       AUTO-LOGIN SETUP (OPTIONAL)"
+echo "========================================"
+echo "To enable one-click bot startup with auto-login:"
+echo
+echo "1. Edit backend/user_profiles.json"
+echo "2. Fill in these fields:"
+echo "   - user_id: Your Zerodha client ID"
+echo "   - password: Your Zerodha password"
+echo "   - totp_secret: Your 2FA secret key"
+echo "   - api_key: Your Kite API key"
+echo "   - api_secret: Your Kite API secret"
+echo
+echo "See AUTO_LOGIN_SETUP_GUIDE.md for detailed instructions"
+echo
 echo "========================================"
 echo
 echo "NEXT STEPS:"
-echo "1. Edit backend/access_token.json with your Kite credentials"
-echo "2. Review backend/strategy_params.json for trading parameters"
-echo "3. Run ./START_BOT_LINUX.sh to launch the trading bot"
-echo "4. Access the web interface at http://localhost:3000"
-echo
-echo "Press Enter to continue..."
-read
+echo "1. Edit backend/user_profiles.json for auto-login (recommended)"
+echo "2. Or use backend/access_token.json if you already have a token"
+echo "3. Review backend/strategy_params.json for trading parameters"
+echo "4. Run ./START_BOT_LINUX.sh to launch the trading bot"
+echo "5. Access the web interface at http://localhost:3000"
