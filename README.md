@@ -1,7 +1,3 @@
-This is a solid, professional structure for a GitHub repository. It’s clean, follows standard documentation practices, and makes the setup process clear for other developers.
-
-I've made a few minor adjustments to the Markdown formatting to ensure the code blocks and headers render correctly on GitHub. I also added a "Security Warning" section—since this involves Kotak Neo credentials, it’s vital to remind users not to commit their broker_config.json to a public repo.
-
 Trading Bot Kotak — Breakout Logic Trading System
 A fully automated algorithmic trading bot for Kotak Neo featuring a Supertrend breakout strategy, real-time monitoring, and multi-user support.
 
