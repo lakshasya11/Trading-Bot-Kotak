@@ -1,3 +1,7 @@
+# Node
+node_modules/
+package-lock.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -25,13 +29,15 @@ wheels/
 
 # Trading Bot Specific
 access_token*.json
+strategy_params.json
 broker_config.json
 user_profiles.json
-strategy_params.json
 *.db
 trading_data*.db
 last_run_date.txt
 .env
+login/**/node_modules/
+frontend/node_modules/
 
 # IDE
 .vscode/

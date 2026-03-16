@@ -1,6 +1,18 @@
 import asyncio
+import numpy as np
+import pandas as pd
 from datetime import datetime
 from .database import today_engine, all_engine, sql_text
+
+def sanitize_value(v):
+    """Convert numpy/pandas types to native Python types for database compatibility."""
+    if isinstance(v, (np.integer, np.floating)):
+        return v.item()
+    if isinstance(v, np.ndarray):
+        return v.tolist()
+    if pd.isna(v):
+        return None
+    return v
 
 class TradeLogger:
     """Handles all database interactions for logging trades using a connection pool."""
@@ -10,46 +22,25 @@ class TradeLogger:
 
     async def log_trade(self, trade_info):
         """Asynchronously logs a completed trade to the databases using the pool."""
+        # Sanitize data: convert numpy/pandas types to native Python types
+        sanitized_info = {k: sanitize_value(v) for k, v in trade_info.items()}
+        
         def db_call():
-            columns = ", ".join(trade_info.keys())
-            placeholders = ", ".join(f":{key}" for key in trade_info.keys())
+            columns = ", ".join(sanitized_info.keys())
+            placeholders = ", ".join(f":{key}" for key in sanitized_info.keys())
             sql = f"INSERT INTO trades ({columns}) VALUES ({placeholders})"
-            
-            # Track which databases succeeded/failed
-            failed_dbs = []
-            succeeded_dbs = []
-            exceptions = []
             
             for engine in self.engines:
                 try:
                     with engine.begin() as conn:
-                        result = conn.execute(sql_text(sql), trade_info)
-                        # Verify rows were inserted
-                        if result.rowcount <= 0:
-                            db_name = engine.url.database
-                            db_short = db_name.split('/')[-1] if '/' in db_name else db_name
-                            failed_dbs.append(f"{db_short}: No rows inserted (rowcount={result.rowcount})")
-                            print(f"🚨 CRITICAL DB ERROR: No rows inserted to {db_name}")
-                        else:
-                            db_name = engine.url.database
-                            succeeded_dbs.append(db_name.split('/')[-1] if '/' in db_name else db_name)
+                        conn.execute(sql_text(sql), sanitized_info)
                 except Exception as e:
+                    import logging
+                    logger = logging.getLogger("core.trade_logger")
                     db_name = engine.url.database
-                    db_short = db_name.split('/')[-1] if '/' in db_name else db_name
-                    error_msg = f"{db_short}: {str(e)[:100]}"
-                    failed_dbs.append(error_msg)
-                    exceptions.append(e)
-                    print(f"🚨 CRITICAL DB ERROR writing to {db_name}: {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Log result with details
-            if failed_dbs or exceptions:
-                print(f"⚠️  Trade log status - Saved to {len(succeeded_dbs)} DB(s): {succeeded_dbs}, Failed: {failed_dbs}")
-                if exceptions:
-                    raise Exception(f"Trade logging failed: {failed_dbs}")
-            else:
-                print(f"✅ Trade logged to {len(succeeded_dbs)} databases successfully")
+                    logger.error(f"CRITICAL DB ERROR writing to {db_name}: {e}")
+                    # Also print for console visibility
+                    print(f"CRITICAL DB ERROR writing to {db_name}: {e}")
 
         async with self.db_lock:
             await asyncio.to_thread(db_call)
@@ -60,40 +51,74 @@ class TradeLogger:
         Creates/updates tables if they don't exist and clears the 'today'
         database if it's a new day.
         """
-        create_table_sql = sql_text('''
-            CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                trigger_reason TEXT NOT NULL,
-                symbol TEXT,
-                quantity INTEGER,
-                pnl REAL,
-                entry_price REAL,
-                exit_price REAL,
-                exit_reason TEXT,
-                trend_state TEXT,
-                atr REAL,
-                charges REAL,
-                net_pnl REAL,
-                entry_time TEXT,
-                exit_time TEXT,
-                duration_seconds REAL,
-                max_price REAL,
-                signal_time TEXT,
-                order_time TEXT,
-                expected_entry REAL,
-                expected_exit REAL,
-                entry_slippage REAL,
-                exit_slippage REAL,
-                latency_ms INTEGER
-            )
-        ''')
+        if today_engine.dialect.name == 'sqlite':
+            create_table_sql = sql_text('''
+                CREATE TABLE IF NOT EXISTS trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    trigger_reason TEXT NOT NULL,
+                    symbol TEXT,
+                    quantity INTEGER,
+                    pnl REAL,
+                    entry_price REAL,
+                    exit_price REAL,
+                    exit_reason TEXT,
+                    trend_state TEXT,
+                    atr REAL,
+                    charges REAL,
+                    net_pnl REAL,
+                    entry_time TEXT,
+                    exit_time TEXT,
+                    duration_seconds REAL,
+                    max_price REAL,
+                    signal_time TEXT,
+                    order_time TEXT,
+                    expected_entry REAL,
+                    expected_exit REAL,
+                    entry_slippage REAL,
+                    exit_slippage REAL,
+                    latency_ms INTEGER
+                )
+            ''')
+        else:
+            # PostgreSQL syntax
+            create_table_sql = sql_text('''
+                CREATE TABLE IF NOT EXISTS trades (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TEXT NOT NULL,
+                    trigger_reason TEXT NOT NULL,
+                    symbol TEXT,
+                    quantity INTEGER,
+                    pnl REAL,
+                    entry_price REAL,
+                    exit_price REAL,
+                    exit_reason TEXT,
+                    trend_state TEXT,
+                    atr REAL,
+                    charges REAL,
+                    net_pnl REAL,
+                    entry_time TEXT,
+                    exit_time TEXT,
+                    duration_seconds REAL,
+                    max_price REAL,
+                    signal_time TEXT,
+                    order_time TEXT,
+                    expected_entry REAL,
+                    expected_exit REAL,
+                    entry_slippage REAL,
+                    exit_slippage REAL,
+                    latency_ms INTEGER
+                )
+            ''')
         
         def upgrade_schema(engine):
+            from sqlalchemy import inspect
             with engine.connect() as conn:
                 conn.execute(create_table_sql)
-                cursor = conn.execute(sql_text("PRAGMA table_info(trades);"))
-                columns = [row[1] for row in cursor]
+                if hasattr(conn, 'commit'): conn.commit()
+                
+                inspector = inspect(engine)
+                columns = [col['name'] for col in inspector.get_columns('trades')]
                 
                 # Add missing columns if they don't exist
                 new_columns = [
@@ -146,15 +171,13 @@ class TradeLogger:
         upgrade_schema(all_engine)
         
         try:
-            from .broker_factory import ACTIVE_UCC
-            last_run_file = f"last_run_{ACTIVE_UCC}.txt"
-            with open(last_run_file, "r") as f: last_run_date = f.read()
+            with open("last_run_date.txt", "r") as f: last_run_date = f.read().strip()
         except FileNotFoundError: last_run_date = ""
 
         today_date = datetime.now().strftime("%Y-%m-%d")
         
         if last_run_date != today_date:
-            print(f"New day detected for {ACTIVE_UCC}. Clearing today's trade log...")
+            print(f"New day detected. Clearing today's trade log...")
             # --- THIS IS THE CORRECTED LOGIC ---
             # It now ONLY clears the today_engine.
             with today_engine.begin() as conn:
@@ -162,7 +185,7 @@ class TradeLogger:
             
             # The incorrect block that cleared all_engine has been REMOVED.
             
-            with open(last_run_file, "w") as f: f.write(today_date)
-            print(f"Today's trade log for {ACTIVE_UCC} cleared.")
+            with open("last_run_date.txt", "w") as f: f.write(today_date)
+            print("Today's trade log cleared.")
 
         print("Databases setup complete.")

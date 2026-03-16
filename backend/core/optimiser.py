@@ -1,26 +1,27 @@
 # backend/core/optimizer.py
 import json
-import sqlite3
 import pandas as pd
 import asyncio
+from .database import all_engine, sql_text
 
 class OptimizerBot:
-    # --- MODIFIED: Point to the 'all' database by default ---
-    def __init__(self, db_path='trading_data_all.db', params_path='strategy_params.json'):
-        self.db_path = db_path
+    def __init__(self, params_path='strategy_params.json'):
         self.params_path = params_path
         self.justifications = []
 
     async def get_historical_data(self, days=60):
         try:
-            # Use asyncio.to_thread to run the synchronous DB call in a separate thread
             def db_call():
-                conn = sqlite3.connect(self.db_path)
-                query = f"SELECT * FROM trades WHERE timestamp >= date('now', '-{days} days')"
-                df = pd.read_sql_query(query, conn)
-                conn.close()
-                print(f"Optimizer: Loaded {len(df)} trades from the last {days} days.")
-                return df
+                with all_engine.connect() as conn:
+                    if all_engine.dialect.name == 'sqlite':
+                        query = sql_text(f"SELECT * FROM trades WHERE timestamp >= date('now', '-{days} days')")
+                    else:
+                        # PostgreSQL syntax
+                        query = sql_text(f"SELECT * FROM trades WHERE timestamp >= CURRENT_DATE - INTERVAL '{days} days'")
+                    
+                    df = pd.read_sql_query(query, conn)
+                    print(f"Optimizer: Loaded {len(df)} trades from the last {days} days.")
+                    return df
             return await asyncio.to_thread(db_call)
         except Exception as e:
             print(f"Optimizer: Could not read from database. Error: {e}")

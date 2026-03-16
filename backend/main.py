@@ -66,7 +66,7 @@ from core.strategy import MARKET_STANDARD_PARAMS
 from core.optimiser import OptimizerBot
 from core.trade_logger import TradeLogger
 from core.bot_service import TradingBotService, get_bot_service
-from core.database import today_engine, all_engine
+from core.database import today_engine, all_engine, sql_text
 
 # ===== COOLDOWN MECHANISM =====
 last_request_times = defaultdict(float)
@@ -233,17 +233,12 @@ async def get_health():
     """🔥 Health check endpoint - returns bot status and db info"""
     service = await get_bot_service()
     
-    # Check database health
     db_status = "unknown"
     trades_count = 0
     try:
-        import sqlite3
-        from core.database import TODAY_DB_PATH
-        conn = sqlite3.connect(TODAY_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM trades")
-        trades_count = cursor.fetchone()[0]
-        conn.close()
+        with today_engine.connect() as conn:
+            result = conn.execute(sql_text("SELECT COUNT(*) FROM trades"))
+            trades_count = result.scalar()
         db_status = "healthy"
     except Exception as e:
         db_status = f"error: {str(e)[:50]}"
@@ -280,13 +275,10 @@ async def get_status():
 
 @app.get("/api/debug_info")
 async def get_debug_info():
-    from core.database import TODAY_DB_PATH, ALL_DB_PATH
     return {
         "cwd": os.getcwd(),
-        "today_db_path": TODAY_DB_PATH,
-        "today_db_exists": os.path.exists(TODAY_DB_PATH),
-        "today_db_size": os.path.getsize(TODAY_DB_PATH) if os.path.exists(TODAY_DB_PATH) else 0,
-        "all_db_path": ALL_DB_PATH,
+        "today_db": str(today_engine.url),
+        "all_db": str(all_engine.url),
         "sys_path": sys.path[:5],
         "pid": os.getpid()
     }
@@ -358,10 +350,11 @@ async def get_trade_history():
                 if len(df) == 0:
                     logger.info(f"📋 today_engine is empty, checking all_engine for today's trades ({today_date})...")
                     with all_engine.connect() as all_conn:
+                        query = sql_text("SELECT * FROM trades WHERE timestamp LIKE :ts ORDER BY timestamp ASC")
                         df = pd.read_sql_query(
-                            "SELECT * FROM trades WHERE timestamp LIKE ? ORDER BY timestamp ASC",
+                            query,
                             all_conn,
-                            params=(f"{today_date}%",)
+                            params={"ts": f"{today_date}%"}
                         )
                         logger.info(f"✅ Found {len(df)} trades in all_engine for today.")
                 

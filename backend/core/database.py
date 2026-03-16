@@ -1,44 +1,41 @@
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
+from dotenv import load_dotenv
 
-from .broker_factory import ACTIVE_UCC
-
-# --- THIS IS THE FIX: Use the parent directory of 'core' ---
-# Get the directory where this script ('database.py') is located, which is the 'core' folder
+# Load environment variables from .env file
 CORE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Get the parent directory of 'core', which is the 'backend' root folder
 BASE_DIR = os.path.dirname(CORE_DIR)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# Define the database file names - now USER SPECIFIC based on UCC
-TODAY_DB_NAME = f"trading_data_{ACTIVE_UCC}_today.db"
-ALL_DB_NAME = f"trading_data_{ACTIVE_UCC}_all.db"
+# Database configuration from environment variables
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME_TODAY = os.getenv("DB_NAME_TODAY", "trading_kotak_today")
+DB_NAME_ALL = os.getenv("DB_NAME_ALL", "trading_kotak_all")
 
-# Create the full, absolute paths to the database files
-# os.path.join will now place them in the 'backend' root directory
-TODAY_DB_PATH = os.path.join(BASE_DIR, TODAY_DB_NAME)
-ALL_DB_PATH = os.path.join(BASE_DIR, ALL_DB_NAME)
+# PostgreSQL connection URLs
+DATABASE_URL_TODAY = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME_TODAY}"
+DATABASE_URL_ALL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME_ALL}"
 
-# SQLAlchemy database URLs for SQLite using the absolute paths
-DATABASE_URL_TODAY = f"sqlite:///{TODAY_DB_PATH}"
-DATABASE_URL_ALL = f"sqlite:///{ALL_DB_PATH}"
-
-# Create a shared engine for each database.
+# Create a shared engine for each database
+# Note: PostgreSQL engines do not need check_same_thread=False
 today_engine = create_engine(
     DATABASE_URL_TODAY,
-    connect_args={"check_same_thread": False},
     poolclass=QueuePool,
-    pool_size=5,
-    max_overflow=2
+    pool_size=10,
+    max_overflow=5,
+    pool_pre_ping=True
 )
 
 all_engine = create_engine(
     DATABASE_URL_ALL,
-    connect_args={"check_same_thread": False},
     poolclass=QueuePool,
-    pool_size=5,
-    max_overflow=2
+    pool_size=10,
+    max_overflow=5,
+    pool_pre_ping=True
 )
 
 # Export the 'text' function for convenience
