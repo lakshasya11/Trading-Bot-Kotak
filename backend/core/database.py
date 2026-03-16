@@ -2,6 +2,8 @@ import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
+from .broker_factory import ACTIVE_UCC
+
 # --- THIS IS THE FIX: Use the parent directory of 'core' ---
 # Get the directory where this script ('database.py') is located, which is the 'core' folder
 CORE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9,9 +11,9 @@ CORE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Get the parent directory of 'core', which is the 'backend' root folder
 BASE_DIR = os.path.dirname(CORE_DIR)
 
-# Define the database file names
-TODAY_DB_NAME = "trading_data_today.db"
-ALL_DB_NAME = "trading_data_all.db"
+# Define the database file names - now USER SPECIFIC based on UCC
+TODAY_DB_NAME = f"trading_data_{ACTIVE_UCC}_today.db"
+ALL_DB_NAME = f"trading_data_{ACTIVE_UCC}_all.db"
 
 # Create the full, absolute paths to the database files
 # os.path.join will now place them in the 'backend' root directory

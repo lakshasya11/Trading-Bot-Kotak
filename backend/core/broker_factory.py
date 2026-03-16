@@ -48,8 +48,10 @@ def _load_broker_config() -> dict:
 
 _broker_config = _load_broker_config()
 BROKER_NAME: str = _broker_config.get("broker", "kite").lower().strip()
+# Get the unique identifier for the active user (UCC for Kotak, User ID for Kite)
+ACTIVE_UCC: str = _broker_config.get("kotak_ucc") or _broker_config.get("id") or "default"
 
-print(f"[BROKER FACTORY] Active broker: {BROKER_NAME}")
+print(f"[BROKER FACTORY] Active broker: {BROKER_NAME} | User: {ACTIVE_UCC}")
 
 # ── Initialise the correct broker ───────────────────────────────────────
 

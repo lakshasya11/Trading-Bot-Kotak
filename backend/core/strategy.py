@@ -142,6 +142,9 @@ class Strategy:
         self.risk_manager = RiskManager(self.params, self._log_debug)
         self.trade_logger = TradeLogger(self.db_lock)
         self.order_manager = OrderManager(self._log_debug)
+        
+        # 🔄 TRADE LOGGING: Track pending trade logging tasks for graceful shutdown
+        self.pending_trade_log_tasks: set[asyncio.Task] = set()
 
         # --- V47.16 - Duplicate trade prevention (7 Layers) ---
         self.entry_in_progress = False         # Layer 1 & 7: Global flag for entry processing
@@ -230,6 +233,37 @@ class Strategy:
         
         if flushed_count > 0:
             await self._log_debug("Broadcast Flush", f"✅ Flushed {flushed_count} pending broadcasts")
+    
+    async def flush_pending_trades(self, timeout_seconds: float = 3.0):
+        """Wait for all pending trade logging tasks to complete before shutdown"""
+        await self._log_debug("Trade Flush", f"🔄 Waiting for {len(self.pending_trade_log_tasks)} pending trade logs (timeout: {timeout_seconds}s)...")
+        
+        if not self.pending_trade_log_tasks:
+            await self._log_debug("Trade Flush", "✅ No pending trade logs - database is current")
+            return
+        
+        try:
+            # Wait for all pending trade logging tasks to complete with timeout
+            _, pending = await asyncio.wait(
+                self.pending_trade_log_tasks,
+                timeout=timeout_seconds,
+                return_when=asyncio.ALL_COMPLETED
+            )
+            
+            if pending:
+                pending_count = len(pending)
+                await self._log_debug("Trade Flush", f"⚠️ {pending_count} trade log tasks still pending after {timeout_seconds}s timeout")
+                # Force cancel remaining tasks (they're taking too long)
+                for task in pending:
+                    task.cancel()
+            else:
+                await self._log_debug("Trade Flush", f"✅ All {len(self.pending_trade_log_tasks)} trade logs saved to database")
+            
+            # Clean up completed tasks
+            self.pending_trade_log_tasks = {task for task in self.pending_trade_log_tasks if not task.done()}
+            
+        except Exception as e:
+            await self._log_debug("Trade Flush Error", f"❌ Error waiting for trade logs: {e}")
     
     async def _calculate_trade_charges(self, tradingsymbol, exchange, entry_price, exit_price, quantity):
         BROKERAGE_PER_ORDER = 20.0; STT_RATE = 0.001; GST_RATE = 0.18; SEBI_RATE = 10 / 1_00_00_000; STAMP_DUTY_RATE = 0.00003
@@ -4985,8 +5019,11 @@ class Strategy:
                         else:
                             await self._log_debug("TRADE-LOG-FAILED", f"❌ Failed to log trade after {max_retries} attempts: {log_error}")
             
-            # 🚀 START LOGGING IN BACKGROUND (non-blocking)
-            asyncio.create_task(log_trade_with_retry())
+            # 🚀 START LOGGING IN BACKGROUND (non-blocking but tracked for shutdown)
+            trade_log_task = asyncio.create_task(log_trade_with_retry())
+            self.pending_trade_log_tasks.add(trade_log_task)
+            # Remove from tracking when task completes
+            trade_log_task.add_done_callback(self.pending_trade_log_tasks.discard)
             
             # 🚀 BROADCAST to UI IMMEDIATELY for instant display
             await self.manager.broadcast({"type": "new_trade_log", "payload": log_info})

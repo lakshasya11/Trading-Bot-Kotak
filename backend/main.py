@@ -228,6 +228,38 @@ class TokenRequest(BaseModel): request_token: str
 class StartRequest(BaseModel): params: dict; selectedIndex: str
 class WatchlistRequest(BaseModel): side: str; strike: int
 
+@app.get("/api/health")
+async def get_health():
+    """🔥 Health check endpoint - returns bot status and db info"""
+    service = await get_bot_service()
+    
+    # Check database health
+    db_status = "unknown"
+    trades_count = 0
+    try:
+        import sqlite3
+        from core.database import TODAY_DB_PATH
+        conn = sqlite3.connect(TODAY_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM trades")
+        trades_count = cursor.fetchone()[0]
+        conn.close()
+        db_status = "healthy"
+    except Exception as e:
+        db_status = f"error: {str(e)[:50]}"
+    
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "bot_running": service.is_running,
+        "bot_started": service.strategy_instance is not None,
+        "database": {
+            "status": db_status,
+            "trades_today": trades_count
+        },
+        "uptime_seconds": time.time() - service.startup_time if hasattr(service, 'startup_time') else "unknown"
+    }
+
 @app.get("/api/status")
 async def get_status():
     # Check if the global access_token variable exists first

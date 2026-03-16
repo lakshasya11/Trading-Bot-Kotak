@@ -1,0 +1,26 @@
+{
+  "trading_data_V19Q3_all.db": {
+    "total": 20,
+    "wins": 17,
+    "losses": 3,
+    "breakeven": 0,
+    "gross_pnl": 27231.75,
+    "net_pnl": 21925.85
+  },
+  "trading_data_all.db": {
+    "total": 14801,
+    "wins": 10108,
+    "losses": 4438,
+    "breakeven": 255,
+    "gross_pnl": 34464200.59,
+    "net_pnl": 31035158.25
+  },
+  "trading_data_V1X8N_all.db": {
+    "total": 32,
+    "wins": 28,
+    "losses": 4,
+    "breakeven": 0,
+    "gross_pnl": 86609.0,
+    "net_pnl": 78697.56
+  }
+}

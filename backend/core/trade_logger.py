@@ -15,13 +15,41 @@ class TradeLogger:
             placeholders = ", ".join(f":{key}" for key in trade_info.keys())
             sql = f"INSERT INTO trades ({columns}) VALUES ({placeholders})"
             
+            # Track which databases succeeded/failed
+            failed_dbs = []
+            succeeded_dbs = []
+            exceptions = []
+            
             for engine in self.engines:
                 try:
                     with engine.begin() as conn:
-                        conn.execute(sql_text(sql), trade_info)
+                        result = conn.execute(sql_text(sql), trade_info)
+                        # Verify rows were inserted
+                        if result.rowcount <= 0:
+                            db_name = engine.url.database
+                            db_short = db_name.split('/')[-1] if '/' in db_name else db_name
+                            failed_dbs.append(f"{db_short}: No rows inserted (rowcount={result.rowcount})")
+                            print(f"🚨 CRITICAL DB ERROR: No rows inserted to {db_name}")
+                        else:
+                            db_name = engine.url.database
+                            succeeded_dbs.append(db_name.split('/')[-1] if '/' in db_name else db_name)
                 except Exception as e:
                     db_name = engine.url.database
-                    print(f"CRITICAL DB ERROR writing to {db_name}: {e}")
+                    db_short = db_name.split('/')[-1] if '/' in db_name else db_name
+                    error_msg = f"{db_short}: {str(e)[:100]}"
+                    failed_dbs.append(error_msg)
+                    exceptions.append(e)
+                    print(f"🚨 CRITICAL DB ERROR writing to {db_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Log result with details
+            if failed_dbs or exceptions:
+                print(f"⚠️  Trade log status - Saved to {len(succeeded_dbs)} DB(s): {succeeded_dbs}, Failed: {failed_dbs}")
+                if exceptions:
+                    raise Exception(f"Trade logging failed: {failed_dbs}")
+            else:
+                print(f"✅ Trade logged to {len(succeeded_dbs)} databases successfully")
 
         async with self.db_lock:
             await asyncio.to_thread(db_call)
@@ -118,13 +146,15 @@ class TradeLogger:
         upgrade_schema(all_engine)
         
         try:
-            with open("last_run_date.txt", "r") as f: last_run_date = f.read()
+            from .broker_factory import ACTIVE_UCC
+            last_run_file = f"last_run_{ACTIVE_UCC}.txt"
+            with open(last_run_file, "r") as f: last_run_date = f.read()
         except FileNotFoundError: last_run_date = ""
 
         today_date = datetime.now().strftime("%Y-%m-%d")
         
         if last_run_date != today_date:
-            print(f"New day detected. Clearing today's trade log...")
+            print(f"New day detected for {ACTIVE_UCC}. Clearing today's trade log...")
             # --- THIS IS THE CORRECTED LOGIC ---
             # It now ONLY clears the today_engine.
             with today_engine.begin() as conn:
@@ -132,7 +162,7 @@ class TradeLogger:
             
             # The incorrect block that cleared all_engine has been REMOVED.
             
-            with open("last_run_date.txt", "w") as f: f.write(today_date)
-            print("Today's trade log cleared.")
+            with open(last_run_file, "w") as f: f.write(today_date)
+            print(f"Today's trade log for {ACTIVE_UCC} cleared.")
 
         print("Databases setup complete.")

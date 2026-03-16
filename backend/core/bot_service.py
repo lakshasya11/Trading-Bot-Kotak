@@ -388,6 +388,20 @@ class TradingBotService:
                     except Exception as e:
                         print(f"Error during broadcast flush: {e}")
                 
+                # 🔥 CRITICAL: Flush pending trades BEFORE stopping bot
+                # This ensures all executed trades are saved to database before shutdown
+                if self.strategy_instance:
+                    try:
+                        await asyncio.wait_for(
+                            self.strategy_instance.flush_pending_trades(timeout_seconds=2.0),
+                            timeout=2.5
+                        )
+                        print("Pending trades flushed to database successfully.")
+                    except asyncio.TimeoutError:
+                        print("Trade flush timed out - some trades may not be saved")
+                    except Exception as e:
+                        print(f"Error during trade flush: {e}")
+                
                 await asyncio.sleep(0.1)  # Brief delay to allow broadcasts to transmit (reduced from 0.3s)
                 
                 # 1. Stop ticker

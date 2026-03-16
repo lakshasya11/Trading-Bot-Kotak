@@ -1,0 +1,14 @@
+# GIT PUSH COMMANDS
+# Run these commands in your terminal to update GitHub safely
+
+# 1. Ensure sensitive files are NOT tracked (Safety Lock)
+git rm --cached backend/broker_config.json backend/*.db backend/.env backend/access_token.json frontend/.env strategy_params.json user_profiles.json
+
+# 2. Stage all updated files
+git add .
+
+# 3. Commit your changes
+git commit -m "Update bot logic, reports, and perform project cleanup"
+
+# 4. Push to GitHub
+git push origin main
