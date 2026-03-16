@@ -1,14 +1,19 @@
-# GIT PUSH COMMANDS
-# Run these commands in your terminal to update GitHub safely
+# SAFE GITHUB PUSH COMMANDS
+# ========================
 
-# 1. Ensure sensitive files are NOT tracked (Safety Lock)
-git rm --cached backend/broker_config.json backend/*.db backend/.env backend/access_token.json frontend/.env strategy_params.json user_profiles.json
+# 1. SAFETY LOCK (Run this before every push to protect your passwords/data)
+# (Ignore errors here - if it says "pathspec did not match", you are ALREADY safe!)
+git rm --cached backend/broker_config.json backend/*.db backend/.env backend/access_token.json frontend/.env strategy_params.json user_profiles.json 2>$null
 
-# 2. Stage all updated files
+# 2. STAGE YOUR UPDATES
 git add .
 
-# 3. Commit your changes
-git commit -m "Update bot logic, reports, and perform project cleanup"
+# 3. COMMIT YOUR CODE
+# (Describe what you changed inside the quotes)
+git commit -m "Update bot logic and reports"
 
-# 4. Push to GitHub
+# 4. SYNC WITH ONLINE CHANGES (CRITICAL: Prevents "Rejected" error)
+git pull origin main --rebase
+
+# 5. UPLOAD TO GITHUB
 git push origin main
